@@ -15,15 +15,19 @@ def app_param(form_obj, param_list):
 
 
 # creates urls from various search parameters and outputs as a list
-def create_urls(main_api, service_parameter, year, l, output_type, region=[]):
+def create_urls(main_api, service_parameter, year, l, output_type, region=[], responseset='100000'):
     urls = []
     for s in l:
         if region:
             for r in region:
-                url = main_api + service_parameter + year + s + r + '&output=' + output_type
+                url = main_api + service_parameter + year + s + r
+                if responseset: url += '&responseset=' + responseset
+                url += '&output=' + output_type
                 urls.append(url)
         else:
-            url = main_api + service_parameter + year + s + '&output=' + output_type
+            url = main_api + service_parameter + year + s
+            if responseset: url += '&responseset=' + responseset
+            url += '&output=' + output_type
             urls.append(url)
     return urls
 
