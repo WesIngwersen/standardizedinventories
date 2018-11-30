@@ -45,7 +45,7 @@ def query_dmr(urls, sic_list=[], reg_list=[], path=''):
     success_list = []
     if len(urls) != len(sic_list): sic_list = [[s, r] for s in sic_list for r in reg_list]
     for i in range(len(urls)):
-        if sic_list[i] in ('12', '49', ['12', 'KY'], ['12', 'WV'], '93'): continue #No data for SIC2 93? -- double-check
+        if sic_list[i] in (['12', 'KY'], ['12', 'WV']): continue #No data for SIC2 93? -- double-check
         # final_path = path + 'sic_' + sic_list[i] + '.json'
         final_path = path + 'sic_' + str(sic_list[i]) + '.pickle'
         print(final_path)
