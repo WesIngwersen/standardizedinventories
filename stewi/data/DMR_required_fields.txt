@@ -1,6 +1,11 @@
+City
+CountyName
 EstFactor
 ExternalPermitNmbr
+FacilityName
 FacilityTypeIndicator
+GeocodeLatitude
+GeocodeLongitude
 NaicsCode
 ParameterDesc
 PollutantLoad
@@ -10,4 +15,5 @@ TRIDirectPounds
 TRIFids
 TRIIndirectPounds
 Uin
+Zip
 
