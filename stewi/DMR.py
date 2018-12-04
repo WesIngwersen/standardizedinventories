@@ -224,19 +224,19 @@ def main():
     facility_columns = ['FacilityID', 'FacilityName', 'City', 'State', 'Zip', 'Latitude', 'Longitude',
                         'County', 'NAICS', 'SIC'] #'Address' not in DMR
     dmr_facility = dmr_df[facility_columns].drop_duplicates()
-    dmr_facility.to_csv(set_dir(output_dir + 'facility/')+'dmr_' + report_year + '.csv', index=False)
+    dmr_facility.to_csv(set_dir(output_dir + 'facility/')+'DMR_' + report_year + '.csv', index=False)
     # # elif output_format == 'flow':
-    # flow_columns = ['FlowName', 'FlowID']
-    # dmr_flow = dmr_df[flow_columns].drop_duplicates()
-    # dmr_flow['Compartment'] = 'air'
-    # dmr_flow['Unit'] = 'kg'
-    # dmr_flow.to_csv(output_dir + 'flow/dmr_' + report_year + '.csv', index=False)
+    flow_columns = ['FlowName']
+    dmr_flow = dmr_df[flow_columns].drop_duplicates()
+    dmr_flow['Compartment'] = 'water'
+    dmr_flow['Unit'] = 'kg'
+    dmr_flow.to_csv(output_dir + 'flow/DMR_' + report_year + '.csv', index=False)
     # elif output_format == 'flowbyfacility':
     fbf_columns = ['FlowName', 'FlowAmount', 'FacilityID', 'ReliabilityScore']
     dmr_fbf = dmr_df[fbf_columns].drop_duplicates()
     dmr_fbf['Compartment'] = 'water'
     dmr_fbf['Unit'] = 'kg'
-    dmr_fbf.to_csv(set_dir(output_dir + 'flowbyfacility/')+'dmr_' + report_year + '.csv', index=False)
+    dmr_fbf.to_csv(set_dir(output_dir + 'flowbyfacility/')+'DMR_' + report_year + '.csv', index=False)
 
     file_name = data_source + '_' + report_year + '.csv'
     dmr_df.to_csv(path_or_buf=output_dir + file_name, index=False)
