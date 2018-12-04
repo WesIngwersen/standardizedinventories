@@ -224,6 +224,9 @@ def main():
     dmr_df = dmr_df[dmr_df['FlowAmount'] != '--']
     # Already in kg/yr, so no conversion necessary
 
+    #FlowAmount is not a number. Set FlowAmount to float64
+    dmr_df['FlowAmount'] = pd.to_numeric(dmr_df['FlowAmount'], errors='coerce')
+
     # if output_format == 'facility':
     facility_columns = ['FacilityID', 'FacilityName', 'City', 'State', 'Zip', 'Latitude', 'Longitude',
                         'County', 'NAICS', 'SIC'] #'Address' not in DMR
