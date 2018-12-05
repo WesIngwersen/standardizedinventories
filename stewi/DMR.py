@@ -221,10 +221,14 @@ def main():
     dmr_df.rename(columns={'CountyName': 'County'}, inplace=True)
     dmr_df.rename(columns={'GeocodeLatitude': 'Latitude'}, inplace=True)
     dmr_df.rename(columns={'GeocodeLongitude': 'Longitude'}, inplace=True)
+    #Drop flow amonut of '--'
     dmr_df = dmr_df[dmr_df['FlowAmount'] != '--']
     # Already in kg/yr, so no conversion necessary
 
-    #FlowAmount is not a number. Set FlowAmount to float64
+    #FlowAmount is not a number
+    #First remove commas
+    dmr_df['FlowAmount'] = dmr_df['FlowAmount'].replace({',':''},regex=True)
+    #Then convert to numeric
     dmr_df['FlowAmount'] = pd.to_numeric(dmr_df['FlowAmount'], errors='coerce')
 
     # if output_format == 'facility':
