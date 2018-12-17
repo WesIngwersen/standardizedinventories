@@ -6,255 +6,269 @@
 import os, requests
 import pandas as pd
 import stewi.globals as globals
-from stewi.globals import set_dir
+from stewi.globals import set_dir, filter_inventory, validate_inventory, write_validation_result, unit_convert
 
-data_source = 'dmr'
+data_source = 'DMR'
 output_dir = globals.output_dir
 data_dir = globals.data_dir
+dmr_data_dir = data_dir + data_source + '/'
 dmr_external_dir = set_dir(data_dir + '/../../../DMR Data Files')
 
-
-# appends form object to be used in query to sic code
-def app_param(form_obj, param_list):
-    result = [form_obj + s for s in param_list]
-    return result
-
-
-# creates urls from various search parameters and outputs as a list
-def create_urls(main_api, service_parameter, year, l, output_type, region=[], responseset='100000',nutrient_agg=True):
-    urls = []
-    for s in l:
-        if region:
-            for r in region:
-                url = main_api + service_parameter + year + s + r
-                if responseset: url += '&responseset=' + responseset
-                if nutrient_agg:
-                    url += '&p_nutrient_agg=Y'
-                url += '&output=' + output_type
-                urls.append(url)
-        else:
-            url = main_api + service_parameter + year + s
-            if responseset: url += '&responseset=' + responseset
-            if nutrient_agg:
-                url += '&p_nutrient_agg=Y'
-            url += '&output=' + output_type
-            urls.append(url)
-    return urls
+# two digit SIC codes from advanced search drop down stripped and formatted as a list
+report_year = '2016'  # year of data requested
+sic2 = list(pd.read_csv(dmr_data_dir + '2_digit_SIC.csv', dtype={'SIC2': str})['SIC2'])
+epa_region = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
+states_df = pd.read_csv(data_dir + 'state_codes.csv')
+states = list(states_df['states']) + list(states_df['dc']) + list(states_df['territories'])
+states = [x for x in states if str(x) != 'nan']
+base_url = 'https://ofmpub.epa.gov/echo/dmr_rest_services.get_custom_data_annual?'  # base url
 
 
-def query_dmr(urls, sic_list=[], reg_list=[], path=''):
+def generate_url(base_url=base_url, report_year=report_year, sic='', region='', state='', nutrient='', nutrient_agg=False, responseset='100000', pageno='1', output_type='JSON'):
+    url = base_url + 'p_year=' + report_year
+    if sic: url += '&p_sic2=' + sic
+    if region: url += '&p_reg=' + region
+    if state: url += '&p_st=' + state
+    if nutrient: url += '&p_poll_cat=Nut' + nutrient
+    if nutrient_agg: url += '&p_nutrient_agg=Y'
+    if responseset: url += '&ResponseSet=' + str(responseset)
+    if pageno: url += '&PageNo=' + str(pageno)
+    if output_type: url += '&output=' + output_type
+    return url
+# 'https://ofmpub.epa.gov/echo/dmr_rest_services.get_custom_data_annual?p_year=2016&p_sic2=02&responseset=500&p_poll_cat=NutN&p_nutrient_agg=Y&output=JSON'
+# 'https://ofmpub.epa.gov/echo/dmr_rest_services.get_custom_data_annual?p_year=2016&p_sic2=02&responseset=500&p_poll_cat=NutP&p_nutrient_agg=Y&output=JSON'
+
+
+def query_dmr(sic_list=sic2, region_list=[], state_list=[], nutrient='', path=dmr_external_dir):
+    """
+    :param sic_list: Uses a predefined list of 2-digit SIC codes default
+    :param region_list: Option to break up queries further by list of EPA regions
+    :param state_list: Option to break up queries further by list of states
+    :param nutrient: Option to query by nutrient category with aggregation. Input 'N' or 'P'
+    :param path: Path to save raw data as pickle files. Set to external directory one level above 'standardizedinventories' by default
+    :return: output_df, max_error_list, no_data_list, success_list
+    """
     output_df = pd.DataFrame()
-    max_error_list = []
-    no_data_list = []
-    success_list = []
-    if len(urls) != len(sic_list): sic_list = [[s, r] for s in sic_list for r in reg_list]
-    for i in range(len(urls)):
-        if sic_list[i] in (['12', 'KY'], ['12', 'WV']): continue #No data for SIC2 93? -- double-check
-        # final_path = path + 'sic_' + sic_list[i] + '.json'
-        final_path = path + 'sic_' + str(sic_list[i]) + '.pickle'
-        print(final_path)
-        if len(sic_list) == len(urls): print(sic_list[i])
-        if os.path.exists(final_path):
-            print(final_path)
-            df = pd.read_pickle(final_path)
-            df = pd.DataFrame(df['Results']['Results'])
-            output_df = pd.concat([output_df, df])
-            if len(sic_list) == len(urls): success_list.append(sic_list[i])
-            continue
-        while True:
-            try:
-                print(urls[i])
-                json_data = requests.get(urls[i]).json()
-                df = pd.DataFrame(json_data)
-                break
-            except: pass
-            #Exception handling for http 500 server error still needed
-        if 'Error' in df.index:
-            if df['Results'].astype(str).str.contains('Maximum').any():
-                # print("iterate through by region code" + url)
-                # split url by & and append region code, import function debugging
-                if len(sic_list) == len(urls): max_error_list.append(sic_list[i])
-            else: print("Error: " + urls[i])
-        elif 'NoDataMsg' in df.index:
-            if len(sic_list) == len(urls):
-                print('No data found for'': ' + urls[i])
-                no_data_list.append(sic_list[i])
-        else:
-            # with open(final_path, 'w') as fp:
-            # json.dump(json_data, fp, indent = 2)
-            pd.to_pickle(df, final_path)
-            df = pd.DataFrame(df['Results']['Results'])
-            output_df = pd.concat([output_df, df])
-            if len(sic_list) == len(urls): success_list.append(sic_list[i])
+    max_error_list, no_data_list, success_list = [], [], []
+    param_list = []
+    #
+    if region_list: param_list = [[sic, r] for sic in sic_list for r in region_list]
+    if state_list: param_list = [[sic, state] for sic in sic_list for state in state_list]
+    if param_list:
+        print('Breaking up queries further')
+        for params in param_list:
+            print(params)
+            sic = params[0]
+            state_or_region = params[1]
+            if params in (['12', 'KY'], ['12', 'WV']): # Pagination for SIC 12 (coal mining) in KY and WV
+                if nutrient: url = generate_url(sic=sic, region=state_or_region, nutrient=nutrient, nutrient_agg=True)
+                else: url = generate_url(sic=sic, region=state_or_region)
+                counter = 1
+                pages = 1
+                while counter <= pages:
+                    page = str(counter)
+                    if region_list:
+                        if nutrient:
+                            filepath = path + nutrient + '_sic_' + sic + '_' + state_or_region + '_' + page + '.pickle'
+                            url = generate_url(sic=sic, region=state_or_region, nutrient=nutrient, nutrient_agg=True, responseset='500', pageno=page)
+                        else:
+                            filepath = path + 'sic_' + sic + '_' + state_or_region + '_' + page + '.pickle'
+                            url = generate_url(sic=sic, region=state_or_region, responseset=500, pageno=page)
+                    elif state_list:
+                        if nutrient:
+                            filepath = path + nutrient + '_sic_' + sic + '_' + state_or_region + '_' + page + '.pickle'
+                            url = generate_url(sic=sic, state=state_or_region, nutrient=nutrient, nutrient_agg=True, responseset='500', pageno=page)
+                        else:
+                            filepath = path + 'sic_' + sic + '_' + state_or_region + '_' + page + '.pickle'
+                            url = generate_url(sic=sic, state=state_or_region, responseset=500, pageno=page)
+                    print(url)
+                    if os.path.exists(filepath):
+                        result = pd.read_pickle(filepath)
+                        if str(type(result)) == "<class 'NoneType'>": raise Exception('Problem with saved dataframe')
+                        if counter == 1: pages = int(result['Results']['PageCount'])
+                        success_list.append(sic + '_' + state_or_region + '_' + page)
+                        result = pd.DataFrame(result['Results']['Results'])
+                        output_df = pd.concat([output_df, result])
+                    else:
+                        result = execute_query(url)
+                        if str(type(result)) == "<class 'str'>":
+                            if result == 'no_data': no_data_list.append(sic + '_' + state_or_region + '_' + page)
+                            elif result == 'max_error': max_error_list.append(sic + '_' + state_or_region + '_' + page)
+                        else:
+                            if counter == 1: pages = int(result['Results']['PageCount'])
+                            pd.to_pickle(result, filepath)
+                            result = pd.DataFrame(result['Results']['Results'])
+                            success_list.append(sic + '_' + state_or_region + '_' + page)
+                            output_df = pd.concat([output_df, result])
+                    counter += 1
+            else: # Pagination not necessary
+                if region_list:
+                    if nutrient:
+                        filepath = path + nutrient + '_sic_' + sic + '_' + state_or_region + '.pickle'
+                        url = generate_url(sic=sic, region=state_or_region, nutrient=nutrient, nutrient_agg=True)
+                    else:
+                        filepath = path + 'sic_' + sic + '_' + state_or_region + '.pickle'
+                        url = generate_url(sic=sic, region=state_or_region)
+                elif state_list:
+                    if nutrient:
+                        filepath = path + nutrient + '_sic_' + sic + '_' + state_or_region + '.pickle'
+                        url = generate_url(sic=sic, state=state_or_region, nutrient=nutrient, nutrient_agg=True)
+                    else:
+                        filepath = path + 'sic_' + sic + '_' + state_or_region + '.pickle'
+                        url = generate_url(sic=sic, state=state_or_region)
+                print(url)
+                if os.path.exists(filepath):
+                    result = pd.read_pickle(filepath)
+                    if str(type(result)) == "<class 'NoneType'>": raise Exception('Problem with saved dataframe')
+                    result = pd.DataFrame(result['Results']['Results'])
+                    success_list.append(sic + '_' + state_or_region)
+                    output_df = pd.concat([output_df, result])
+                else:
+                    result = execute_query(url)
+                    if str(type(result)) == "<class 'str'>":
+                        if result == 'no_data': no_data_list.append(sic + '_' + state_or_region)
+                        elif result == 'max_error': max_error_list.append(sic + '_' + state_or_region)
+                    else:
+                        pd.to_pickle(result, filepath)
+                        result = pd.DataFrame(result['Results']['Results'])
+                        success_list.append(sic + '_' + state_or_region)
+                        output_df = pd.concat([output_df, result])
+    else: # 1st run through SIC codes
+        for sic in sic_list:
+            if sic in ['12', '49']: # Assuming SIC 12 & 49 are too big for all reporting years. Skipped for now, broken up by state later.
+                max_error_list.append(sic)
+                continue
+            print(sic)
+            if nutrient:
+                filepath = path + nutrient + '_sic_' + sic + '.pickle'
+                url = generate_url(sic=sic, nutrient=nutrient, nutrient_agg=True)
+            else:
+                filepath = path + 'sic_' + sic + '.pickle'
+                url = generate_url(sic=sic)
+            print(url)
+            if os.path.exists(filepath):
+                result = pd.read_pickle(filepath)
+                if str(type(result)) == "<class 'NoneType'>": raise Exception('Problem with saved dataframe')
+                result = pd.DataFrame(result['Results']['Results'])
+                success_list.append(sic)
+                output_df = pd.concat([output_df, result])
+            else:
+                result = execute_query(url)
+                if str(type(result)) == "<class 'str'>":
+                    if result == 'no_data': no_data_list.append(sic)
+                    elif result == 'max_error': max_error_list.append(sic)
+                else:
+                    pd.to_pickle(result, filepath)
+                    result = pd.DataFrame(result['Results']['Results'])
+                    success_list.append(sic)
+                    output_df = pd.concat([output_df, result])
     return output_df, max_error_list, no_data_list, success_list
 
 
-def query_paginated(sic, url, state='', path=''):
-    output_df = pd.DataFrame()
-    max_error_list = []
-    no_data_list = []
-    success_list = []
-    counter = 1
-    pages = 1
-    url += '&p_st=' + state
-    while counter <= pages:
-        page = sic + '_' + str(counter)
-        print(page + '_' + state)
-        final_path = path + page + '_' + state + '.pickle'
-        if os.path.exists(final_path):
-            df = pd.read_pickle(final_path)
-            if counter == 1: pages = int(df['Results']['PageCount'])
-            df = pd.DataFrame(df['Results']['Results'])
-            output_df = pd.concat([output_df, df])
-            counter += 1
-            continue
-        temp_url = url + '&pageno=' + str(counter)
-        print(temp_url)
-        while True:
-            try:
-                json_data = requests.get(temp_url).json()
-                df = pd.DataFrame(json_data)
-                if counter == 1: pages = int(df['Results']['PageCount'])
-                break
-            except: pass
-        if 'Error' in df.index:
-            if df['Results'].astype(str).str.contains('Maximum').any():
-                max_error_list.append(page + '_' + state)
-            else:
-                print("Error: " + temp_url)
-        elif 'NoDataMsg' in df.index:
-                print('No data found for'': ' + temp_url)
-                no_data_list.append(page + '_' + state)
-        else:
-            # with open(final_path, 'w') as fp:
-            # json.dump(json_data, fp, indent = 2)
-            pd.to_pickle(df, final_path)
-            df = pd.DataFrame(df['Results']['Results'])
-            output_df = pd.concat([output_df, df])
-            success_list.append(page + '_' + state)
-        counter += 1
-    print(max_error_list, no_data_list, success_list)
-    return output_df
+def execute_query(url):
+    while True:
+        try:
+            json_data = requests.get(url).json()
+            result = pd.DataFrame(json_data)
+            break
+        except: pass
+    #Exception handling for http 500 server error still needed
+    if 'Error' in result.index:
+        if result['Results'].astype(str).str.contains('Maximum').any(): return 'max_error'
+        else: return 'other_error'
+    elif 'NoDataMsg' in result.index: return 'no_data'
+    else: return result
 
 
-# creates file path for json output.
-# iterates through url list, requests data, and writes to json file in output directory.
-def main():
-    # two digit SIC codes from advanced search drop down stripped and formatted as a list
-    report_year = '2016'  # year of data requested
-    sic = ['01', '02', '07', '08', '09', '10', '12', '13', '14', '15',
-           '16', '17', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29',
-           '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41',
-           '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53',
-           '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65',
-           '67', '70', '72', '73', '75', '76', '78', '79', '80', '81', '82', '83',
-           '84', '86', '87', '88', '89', '91', '92', '93', '95', '96', '97', '99']
-    epa_region = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
-    states_df = pd.read_csv(data_dir + 'state_codes.csv')
-    states = list(states_df['states']) + list(states_df['dc']) + list(states_df['territories'])
-    states = [x for x in states if str(x) != 'nan']
-    main_api = 'https://ofmpub.epa.gov/echo/dmr_rest_services.get_custom_data_'  # base url
-    service_parameter = 'annual?'  # define which parameter is primary search criterion
-    year = 'p_year=' + report_year  # define year
-    form_obj_sic = '&p_sic2='# define any secondary search criteria
-    form_obj_sic4 = '&p_sic4='
-    form_obj_reg = '&p_reg='
-    form_obj_st = '&p_st='
-    output_type = 'JSON'  # define output type
-
-    # dmr_df = pd.DataFrame()
-
-    sic_code_query = app_param(form_obj_sic, sic)
-    # output_dir = set_output_dir('./output/DMRquerybySIC/')
-    urls = create_urls(main_api, service_parameter, year, sic_code_query,
-                       output_type)  # creates a list oof urls based on sic
-    # json_output_file = get_write_json_file(urls, output_dir, 'DMR_data') #saves json file to LCI-Prime_Output
-    print(report_year)
-    dmr_df, sic_maximum_record_error_list, sic_no_data_list, sic_successful_df_list = \
-        query_dmr(urls, sic, path=dmr_external_dir)#output_dir
-    if sic_successful_df_list: print('Successfully obtained data for the following SIC:\n' +
-                                           str(sic_successful_df_list))
-    if sic_no_data_list: print('No data for the following SIC:\n' + str(sic_no_data_list))
-    if sic_maximum_record_error_list: print('Maximum record limit reached for the following SIC:\n' +
-                                            str(sic_maximum_record_error_list) +
-                                            '\nBreaking queries up by State...\n')
-
-    max_error_sic_query = app_param(form_obj_sic, sic_maximum_record_error_list)
-    states_query = app_param(form_obj_st, states)
-    states_urls = create_urls(main_api, service_parameter, year, max_error_sic_query, output_type, states_query)
-    st_df, st_max_error, st_no_data, st_success = \
-        query_dmr(states_urls, sic_maximum_record_error_list, states, path=dmr_external_dir)  # output_dir
-    if st_success: print('Successfully obtained data for [SIC, State]:\n' + str(st_success))
-    if st_no_data: print(('No data for [SIC, State]:\n' + str(st_no_data)))
-    if st_max_error:
-        print('Maximum record limit still reached for the following [SIC, State]:\n' + str(st_max_error))
-    print('Paginating remaining SIC-State combinations...')
-    dmr_df = pd.concat([dmr_df, st_df])
-
-    for s in ['12']:#sic_maximum_record_error_list:
-        print(s, main_api+service_parameter+year+form_obj_sic+s+'&p_st=KY'+'&output='+output_type, dmr_external_dir)
-        chunks_df = query_paginated(s, main_api+service_parameter+year+form_obj_sic+s+'&output='+output_type, state='KY', path=dmr_external_dir)
-        dmr_df = pd.concat([dmr_df, chunks_df])
-        print(s, main_api+service_parameter+year+form_obj_sic+s+'&p_st=WV'+'&output='+output_type, dmr_external_dir)
-        chunks_df = query_paginated(s, main_api+service_parameter+year+form_obj_sic+s+'&output='+output_type, state='WV', path=dmr_external_dir)
-        dmr_df = pd.concat([dmr_df, chunks_df])
-    # Quit here if the resulting DataFrame is empty
-    if len(dmr_df) == 0:
-        print('No data found for this year.')
-        exit()
-
+def standardize_df(input_df):
     dmr_required_fields = pd.read_csv(data_dir + 'DMR_required_fields.txt', header=None)[0]
-    dmr_df = dmr_df[dmr_required_fields]
+    output_df = input_df[dmr_required_fields]
     reliability_table = globals.reliability_table
     dmr_reliability_table = reliability_table[reliability_table['Source'] == 'DMR']
     dmr_reliability_table.drop(['Source', 'Code'], axis=1, inplace=True)
-    dmr_df['ReliabilityScore'] = dmr_reliability_table['DQI Reliability Score']
+    output_df['ReliabilityScore'] = dmr_reliability_table['DQI Reliability Score']
 
     # Rename with standard column names
-    dmr_df.rename(columns={'ExternalPermitNmbr': 'FacilityID'}, inplace=True)
-    dmr_df.rename(columns={'Siccode': 'SIC'}, inplace=True)
-    dmr_df.rename(columns={'NaicsCode': 'NAICS'}, inplace=True)
-    dmr_df.rename(columns={'StateCode': 'State'}, inplace=True)
-    dmr_df.rename(columns={'ParameterDesc': 'FlowName'}, inplace=True)
-    dmr_df.rename(columns={'DQI Reliability Score': 'ReliabilityScore'}, inplace=True)
-    dmr_df.rename(columns={'PollutantLoad': 'FlowAmount'}, inplace=True)
-    dmr_df.rename(columns={'CountyName': 'County'}, inplace=True)
-    dmr_df.rename(columns={'GeocodeLatitude': 'Latitude'}, inplace=True)
-    dmr_df.rename(columns={'GeocodeLongitude': 'Longitude'}, inplace=True)
-    #Drop flow amonut of '--'
-    dmr_df = dmr_df[dmr_df['FlowAmount'] != '--']
+    output_df.rename(columns={'ExternalPermitNmbr': 'FacilityID'}, inplace=True)
+    output_df.rename(columns={'Siccode': 'SIC'}, inplace=True)
+    output_df.rename(columns={'NaicsCode': 'NAICS'}, inplace=True)
+    output_df.rename(columns={'StateCode': 'State'}, inplace=True)
+    output_df.rename(columns={'ParameterDesc': 'FlowName'}, inplace=True)
+    output_df.rename(columns={'DQI Reliability Score': 'ReliabilityScore'}, inplace=True)
+    output_df.rename(columns={'PollutantLoad': 'FlowAmount'}, inplace=True)
+    output_df.rename(columns={'CountyName': 'County'}, inplace=True)
+    output_df.rename(columns={'GeocodeLatitude': 'Latitude'}, inplace=True)
+    output_df.rename(columns={'GeocodeLongitude': 'Longitude'}, inplace=True)
+    # Drop flow amount of '--'
+    output_df = output_df[output_df['FlowAmount'] != '--']
     # Already in kg/yr, so no conversion necessary
 
-    #FlowAmount is not a number
-    #First remove commas
-    dmr_df['FlowAmount'] = dmr_df['FlowAmount'].replace({',':''},regex=True)
-    #Then convert to numeric
-    dmr_df['FlowAmount'] = pd.to_numeric(dmr_df['FlowAmount'], errors='coerce')
-
-    # if output_format == 'facility':
-    facility_columns = ['FacilityID', 'FacilityName', 'City', 'State', 'Zip', 'Latitude', 'Longitude',
-                        'County', 'NAICS', 'SIC'] #'Address' not in DMR
-    dmr_facility = dmr_df[facility_columns].drop_duplicates()
-    dmr_facility.to_csv(set_dir(output_dir + 'facility/')+'DMR_' + report_year + '.csv', index=False)
-    # # elif output_format == 'flow':
-    flow_columns = ['FlowName']
-    dmr_flow = dmr_df[flow_columns].drop_duplicates()
-    dmr_flow['Compartment'] = 'water'
-    dmr_flow['Unit'] = 'kg'
-    dmr_flow.to_csv(output_dir + 'flow/DMR_' + report_year + '.csv', index=False)
-    # elif output_format == 'flowbyfacility':
-    fbf_columns = ['FlowName', 'FlowAmount', 'FacilityID', 'ReliabilityScore']
-    dmr_fbf = dmr_df[fbf_columns].drop_duplicates()
-    dmr_fbf['Compartment'] = 'water'
-    dmr_fbf['Unit'] = 'kg'
-    dmr_fbf.to_csv(set_dir(output_dir + 'flowbyfacility/')+'DMR_' + report_year + '.csv', index=False)
-
-    file_name = data_source + '_' + report_year + '.csv'
-    dmr_df.to_csv(path_or_buf=output_dir + file_name, index=False)
+    # FlowAmount is not a number
+    # First remove commas
+    output_df['FlowAmount'] = output_df['FlowAmount'].replace({',': ''}, regex=True)
+    # Then convert to numeric
+    output_df['FlowAmount'] = pd.to_numeric(output_df['FlowAmount'], errors='coerce')
+    return output_df
 
 
-if __name__ == '__main__':
-    main()
+print(report_year)
+
+# Query by SIC, then by SIC-state where necessary
+sic_df, sic_max_error_list, sic_no_data_list, sic_success_list = query_dmr()
+sic_state_df, sic_state_max_error_list, sic_state_no_data_list, sic_state_success_list = query_dmr(sic_list=sic_max_error_list, state_list=states)
+sic_df = pd.concat([sic_df, sic_state_df])
+sic_df = standardize_df(sic_df)
+
+# Query and combine aggregated nutrients data
+n_sic_df, n_sic_max_error_list, n_sic_no_data_list, n_sic_success_list = query_dmr(nutrient='N')
+n_sic_state_df, n_sic_state_max_error_list, n_sic_state_no_data_list, n_sic_state_success_list = query_dmr(sic_list=n_sic_max_error_list, state_list=states, nutrient='N')
+p_sic_df, p_sic_max_error_list, p_sic_no_data_list, p_sic_success_list = query_dmr(nutrient='P')
+p_sic_state_df, p_sic_state_max_error_list, p_sic_state_no_data_list, p_sic_state_success_list = query_dmr(sic_list=p_sic_max_error_list, state_list=states, nutrient='P')
+nutrient_agg_df = pd.concat([n_sic_df, p_sic_df, n_sic_state_df, p_sic_state_df])
+nutrient_agg_df = standardize_df(nutrient_agg_df)
+
+# Quit here if the resulting DataFrame is empty
+if len(sic_df) == 0:
+    print('No data found for this year.')
+    exit()
+
+# Validation by state sums across species
+dmr_by_state = sic_df[['State', 'FlowAmount']].groupby('State').sum().reset_index()
+dmr_by_state['FlowName'] = 'All'
+reference_df = pd.read_csv(data_dir + 'DMR_2016_StateTotals.csv')
+reference_df['FlowAmount'] = 0.0
+reference_df = unit_convert(reference_df, 'FlowAmount', 'Unit', 'lb', 0.4535924, 'Amount')
+reference_df = reference_df[['FlowName', 'State', 'FlowAmount']]
+validation_df = validate_inventory(dmr_by_state, reference_df)
+write_validation_result(data_source, report_year, validation_df)
+
+# Filter out nitrogen and phosphorus flows before combining with aggregated nutrients
+dmr_unfiltered = sic_df
+drop_list = pd.read_csv(dmr_data_dir + 'DMR_Parameter_List_10302018.csv')
+drop_list.rename(columns={'PARAMETER_DESC': 'ParameterDesc'}, inplace=True)
+drop_list = drop_list[(drop_list['NITROGEN'] == 'Y') | (drop_list['PHOSPHORUS'] == 'Y')]
+drop_list = drop_list[['ParameterDesc']]
+dmr_df_filtered = filter_inventory(dmr_unfiltered, drop_list, 'drop')
+dmr_df = pd.concat([dmr_df_filtered, nutrient_agg_df]).reset_index(drop=True)
+
+
+# if output_format == 'facility':
+facility_columns = ['FacilityID', 'FacilityName', 'City', 'State', 'Zip', 'Latitude', 'Longitude',
+                    'County', 'NAICS', 'SIC'] #'Address' not in DMR
+dmr_facility = dmr_df[facility_columns].drop_duplicates()
+dmr_facility.to_csv(set_dir(output_dir + 'facility/')+'DMR_' + report_year + '.csv', index=False)
+# # elif output_format == 'flow':
+flow_columns = ['FlowName']
+dmr_flow = dmr_df[flow_columns].drop_duplicates()
+dmr_flow['Compartment'] = 'water'
+dmr_flow['Unit'] = 'kg'
+dmr_flow.to_csv(output_dir + 'flow/DMR_' + report_year + '.csv', index=False)
+# elif output_format == 'flowbyfacility':
+fbf_columns = ['FlowName', 'FlowAmount', 'FacilityID', 'ReliabilityScore']
+dmr_fbf = dmr_df[fbf_columns].drop_duplicates()
+dmr_fbf['Compartment'] = 'water'
+dmr_fbf['Unit'] = 'kg'
+dmr_fbf.to_csv(set_dir(output_dir + 'flowbyfacility/')+'DMR_' + report_year + '.csv', index=False)
 
 
 
