@@ -15,7 +15,7 @@ dmr_data_dir = data_dir + data_source + '/'
 dmr_external_dir = set_dir(data_dir + '/../../../DMR Data Files')
 
 # two digit SIC codes from advanced search drop down stripped and formatted as a list
-report_year = '2016'  # year of data requested
+report_year = '2015'  # year of data requested
 sic2 = list(pd.read_csv(dmr_data_dir + '2_digit_SIC.csv', dtype={'SIC2': str})['SIC2'])
 epa_region = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10']
 states_df = pd.read_csv(data_dir + 'state_codes.csv')
@@ -235,7 +235,7 @@ if len(sic_df) == 0:
 # Validation by state sums across species
 dmr_by_state = sic_df[['State', 'FlowAmount']].groupby('State').sum().reset_index()
 dmr_by_state['FlowName'] = 'All'
-reference_df = pd.read_csv(data_dir + 'DMR_2016_StateTotals.csv')
+reference_df = pd.read_csv(data_dir + 'DMR_'+report_year+'_StateTotals.csv')
 reference_df['FlowAmount'] = 0.0
 reference_df = unit_convert(reference_df, 'FlowAmount', 'Unit', 'lb', 0.4535924, 'Amount')
 reference_df = reference_df[['FlowName', 'State', 'FlowAmount']]
