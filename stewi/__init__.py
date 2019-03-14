@@ -74,6 +74,10 @@ def getInventory(inventory_acronym, year, format='flowbyfacility', filter_for_LC
             filter_path += 'NEI_pollutant_omit_list.csv'
             filter_type = 'drop'
             inventory = filter_inventory(inventory, filter_path, filter_type=filter_type)
+        elif inventory_acronym == 'DMR':
+            filter_path += 'DMR_pollutant_omit_list.csv'
+            filter_type = 'drop'
+            inventory = filter_inventory(inventory, filter_path, filter_type=filter_type)
     return inventory
 
 
