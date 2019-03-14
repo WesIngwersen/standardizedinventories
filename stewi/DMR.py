@@ -232,11 +232,6 @@ if len(sic_df) == 0:
     print('No data found for this year.')
     exit()
 
-# Filter flows for LCI
-lci_drop_list = pd.read_csv(dmr_data_dir + 'lci_filter.csv')
-lci_drop_list = lci_drop_list[lci_drop_list['LCI MANUAL EXCLUDE'] == 1]['PARAMETER_DESC']
-lci_drop_list.rename(columns={'PARAMETER_DESC': 'ParameterDesc'}, inplace=True)
-dmr_df_filtered = filter_inventory(sic_df, lci_drop_list, 'drop')
 
 # Validation by state sums across species
 filepath = data_dir + 'DMR_' + report_year + '_StateTotals.csv'
@@ -245,14 +240,14 @@ if os.path.exists(filepath):
     reference_df['FlowAmount'] = 0.0
     reference_df = unit_convert(reference_df, 'FlowAmount', 'Unit', 'lb', 0.4535924, 'Amount')
     reference_df = reference_df[['FlowName', 'State', 'FlowAmount']]
-    dmr_by_state = dmr_df_filtered[['State', 'FlowAmount']].groupby('State').sum().reset_index()
+    dmr_by_state = sic_df[['State', 'FlowAmount']].groupby('State').sum().reset_index()
     dmr_by_state['FlowName'] = 'All'
     validation_df = validate_inventory(dmr_by_state, reference_df)
     write_validation_result(data_source, report_year, validation_df)
 else: print('State totals for validation not found for ' + report_year)
 
 # Filter out nitrogen and phosphorus flows before combining with aggregated nutrients
-dmr_unagg_nut = dmr_df_filtered
+dmr_unagg_nut = sic_df
 nut_drop_list = pd.read_csv(dmr_data_dir + 'DMR_Parameter_List_10302018.csv')
 nut_drop_list.rename(columns={'PARAMETER_DESC': 'ParameterDesc'}, inplace=True)
 nut_drop_list = nut_drop_list[(nut_drop_list['NITROGEN'] == 'Y') | (nut_drop_list['PHOSPHORUS'] == 'Y')]
