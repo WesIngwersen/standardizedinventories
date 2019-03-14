@@ -75,7 +75,7 @@ def set_dir(directory_name):
 
 def import_table(path_or_reference, skip_lines=0, get_time=False):
     import time
-    if '.core.frame.DataFrame' in str(type(path_or_reference)): import_file = path_or_reference
+    if ('.core.frame.DataFrame' in str(type(path_or_reference))) or ('.core.series.Series'in str(type(path_or_reference))): import_file = path_or_reference
     elif path_or_reference[-3:].lower() == 'csv':
         import_file = pd.read_csv(path_or_reference)
     elif 'xls' in path_or_reference[-4:].lower():

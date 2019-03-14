@@ -211,7 +211,6 @@ Quinoline,water,kg
 "Strontium 90, total",water,kg
 "Petrol hydrocarbons, total recoverable",water,kg
 "Domestic waste, solids",water,kg
-"Produced water, oil and grease",water,kg
 "Chlorine, free available",water,kg
 Chloride,water,kg
 "Phenolics, total",water,kg
@@ -234,6 +233,7 @@ p-Cresol,water,kg
 "Hydrocarbons, total petroleum",water,kg
 "Benzene, ethylbenzene, toluene, xylene combination",water,kg
 Polynuc aromatic HC per Method 610,water,kg
+"Produced water, oil and grease",water,kg
 "Boron, total recoverable",water,kg
 Chloroform,water,kg
 Dibromochloromethane,water,kg
@@ -396,8 +396,6 @@ CBOD5/NH3-N,water,kg
 "Hydrocarbons, total gas chromatograph",water,kg
 "BOD, carbonaceous, 28-day (20 deg. C)",water,kg
 "Halogen, total residual",water,kg
-"Nitrogen, Total as NO3 + NH3",water,kg
-Foaming agents,water,kg
 "Phenolic compounds, total",water,kg
 "Chromium, trivalent (as Cr)",water,kg
 "Hardness, tot calc. (Ca, Mg, Fe) as CaC03",water,kg
@@ -660,7 +658,6 @@ Carbamates,water,kg
 Methomyl,water,kg
 Heptane,water,kg
 "Halomethanes, sum",water,kg
-"Oil & grease, total recoverable",water,kg
 "Silica, total (as SiO2)",water,kg
 "Nitrogen, Kjeldahl, dissolved (as N)",water,kg
 Furans,water,kg
@@ -754,6 +751,7 @@ Terpineol,water,kg
 "Benzene, toluene, xylene in combination",water,kg
 "Phthalates, total",water,kg
 Butanone,water,kg
+Foaming agents,water,kg
 Alachlor,water,kg
 "Ethylbenzene, dry weight",water,kg
 n-Propyl alcohol,water,kg
@@ -763,6 +761,7 @@ Sodium chloride (salt),water,kg
 "Oxygen demand, chem. (COD), dissolved",water,kg
 "Phosphorus, Total (Avg Seasonal Load Cap)",water,kg
 Poly[hexamethylenebiguanide] hydrochloride,water,kg
+"Oil & grease, total recoverable",water,kg
 Methylene blue active substances,water,kg
 Neptune Blue,water,kg
 Annual Nitrate Nitrogen Discharged,water,kg
@@ -888,6 +887,7 @@ p-Chloro-m-cresol,water,kg
 Copper,water,kg
 "Solids, fixed dissolved",water,kg
 "Cobalt, dissolved (as Co)",water,kg
+"Nitrogen, Total as NO3 + NH3",water,kg
 Bis(2-ethylhexyl) adipate,water,kg
 ".gamma.-Chlordane, whole water",water,kg
 "Chlordane, .alpha.-, whole water",water,kg

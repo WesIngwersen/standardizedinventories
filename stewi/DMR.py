@@ -6,7 +6,7 @@
 import os, requests
 import pandas as pd
 import stewi.globals as globals
-from stewi.globals import set_dir, filter_inventory, validate_inventory, write_validation_result, unit_convert
+from stewi.globals import set_dir, filter_inventory, filter_states, validate_inventory, write_validation_result, unit_convert
 
 data_source = 'DMR'
 output_dir = globals.output_dir
@@ -217,7 +217,7 @@ print(report_year)
 sic_df, sic_max_error_list, sic_no_data_list, sic_success_list = query_dmr()
 sic_state_df, sic_state_max_error_list, sic_state_no_data_list, sic_state_success_list = query_dmr(sic_list=sic_max_error_list, state_list=states)
 sic_df = pd.concat([sic_df, sic_state_df])
-sic_df = standardize_df(sic_df)
+sic_df = filter_states(standardize_df(sic_df))# TODO: Skip querying of US territories for optimization
 
 # Query and combine aggregated nutrients data
 n_sic_df, n_sic_max_error_list, n_sic_no_data_list, n_sic_success_list = query_dmr(nutrient='N')
@@ -225,32 +225,40 @@ n_sic_state_df, n_sic_state_max_error_list, n_sic_state_no_data_list, n_sic_stat
 p_sic_df, p_sic_max_error_list, p_sic_no_data_list, p_sic_success_list = query_dmr(nutrient='P')
 p_sic_state_df, p_sic_state_max_error_list, p_sic_state_no_data_list, p_sic_state_success_list = query_dmr(sic_list=p_sic_max_error_list, state_list=states, nutrient='P')
 nutrient_agg_df = pd.concat([n_sic_df, p_sic_df, n_sic_state_df, p_sic_state_df])
-nutrient_agg_df = standardize_df(nutrient_agg_df)
+nutrient_agg_df = filter_states(standardize_df(nutrient_agg_df))# TODO: Skip querying of US territories for optimization
 
 # Quit here if the resulting DataFrame is empty
 if len(sic_df) == 0:
     print('No data found for this year.')
     exit()
 
+# Filter flows for LCI
+lci_drop_list = pd.read_csv(dmr_data_dir + 'lci_filter.csv')
+lci_drop_list = lci_drop_list[lci_drop_list['LCI MANUAL EXCLUDE'] == 1]['PARAMETER_DESC']
+lci_drop_list.rename(columns={'PARAMETER_DESC': 'ParameterDesc'}, inplace=True)
+dmr_df_filtered = filter_inventory(sic_df, lci_drop_list, 'drop')
+
 # Validation by state sums across species
-dmr_by_state = sic_df[['State', 'FlowAmount']].groupby('State').sum().reset_index()
-dmr_by_state['FlowName'] = 'All'
-reference_df = pd.read_csv(data_dir + 'DMR_'+report_year+'_StateTotals.csv')
-reference_df['FlowAmount'] = 0.0
-reference_df = unit_convert(reference_df, 'FlowAmount', 'Unit', 'lb', 0.4535924, 'Amount')
-reference_df = reference_df[['FlowName', 'State', 'FlowAmount']]
-validation_df = validate_inventory(dmr_by_state, reference_df)
-write_validation_result(data_source, report_year, validation_df)
+filepath = data_dir + 'DMR_' + report_year + '_StateTotals.csv'
+if os.path.exists(filepath):
+    reference_df = pd.read_csv(filepath)
+    reference_df['FlowAmount'] = 0.0
+    reference_df = unit_convert(reference_df, 'FlowAmount', 'Unit', 'lb', 0.4535924, 'Amount')
+    reference_df = reference_df[['FlowName', 'State', 'FlowAmount']]
+    dmr_by_state = dmr_df_filtered[['State', 'FlowAmount']].groupby('State').sum().reset_index()
+    dmr_by_state['FlowName'] = 'All'
+    validation_df = validate_inventory(dmr_by_state, reference_df)
+    write_validation_result(data_source, report_year, validation_df)
+else: print('State totals for validation not found for ' + report_year)
 
 # Filter out nitrogen and phosphorus flows before combining with aggregated nutrients
-dmr_unfiltered = sic_df
-drop_list = pd.read_csv(dmr_data_dir + 'DMR_Parameter_List_10302018.csv')
-drop_list.rename(columns={'PARAMETER_DESC': 'ParameterDesc'}, inplace=True)
-drop_list = drop_list[(drop_list['NITROGEN'] == 'Y') | (drop_list['PHOSPHORUS'] == 'Y')]
-drop_list = drop_list[['ParameterDesc']]
-dmr_df_filtered = filter_inventory(dmr_unfiltered, drop_list, 'drop')
-dmr_df = pd.concat([dmr_df_filtered, nutrient_agg_df]).reset_index(drop=True)
-
+dmr_unagg_nut = dmr_df_filtered
+nut_drop_list = pd.read_csv(dmr_data_dir + 'DMR_Parameter_List_10302018.csv')
+nut_drop_list.rename(columns={'PARAMETER_DESC': 'ParameterDesc'}, inplace=True)
+nut_drop_list = nut_drop_list[(nut_drop_list['NITROGEN'] == 'Y') | (nut_drop_list['PHOSPHORUS'] == 'Y')]
+nut_drop_list = nut_drop_list[['ParameterDesc']]
+dmr_nut_filtered = filter_inventory(dmr_unagg_nut, nut_drop_list, 'drop')
+dmr_df = pd.concat([dmr_nut_filtered, nutrient_agg_df]).reset_index(drop=True)
 
 # if output_format == 'facility':
 facility_columns = ['FacilityID', 'FacilityName', 'City', 'State', 'Zip', 'Latitude', 'Longitude',
